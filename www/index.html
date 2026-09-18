@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WS-агрегатор — Документация</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>WS-агрегатор</h1>
+            <p class="subtitle">N источников &rarr; агрегация &rarr; один выходной WebSocket</p>
+            <nav class="nav-links">
+                <a href="index.html" class="nav-link active">Документация</a>
+                <a href="ws-demo.html" class="nav-link">Демо</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Обзор</h2>
+            <p>Многопоточный WebSocket-агрегатор на C17: принимает N входящих WebSocket-соединений
+                источников, агрегирует их сообщения и отправляет результат в единственный выходной
+                WebSocket. Обе стороны — источники и выходной WS — сами подключаются к серверу;
+                сервер никогда не выступает WS-клиентом. Раздачи статики в проекте нет — сервер
+                целиком посвящён WebSocket (RFC 6455).</p>
+            <ul>
+                <li><strong>Архитектура:</strong> SO_REUSEPORT + Task Queue + Thread Pool (приём) + отдельный поток-агрегатор (выход)</li>
+                <li><strong>Платформа:</strong> Linux</li>
+                <li><strong>Язык:</strong> C17, без внешних зависимостей (свои SHA-1/base64 для рукопожатия)</li>
+                <li><strong>I/O:</strong> epoll() с EPOLLET + EPOLLONESHOT на приёме, отдельный epoll в потоке-агрегаторе</li>
+                <li><strong>Backpressure:</strong> источники приостанавливаются (park/resume), если выходной WS не успевает — данные не теряются</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>Возможности</h2>
+            <div class="features-grid">
+                <div class="feature">
+                    <h3>WebSocket-рукопожатие</h3>
+                    <p>RFC 6455 п.4: Sec-WebSocket-Accept на своих SHA-1/base64, коды 101/400/426</p>
+                </div>
+                <div class="feature">
+                    <h3>Полный кодек кадров</h3>
+                    <p>Фрагментация, управляющие кадры между фрагментами, PING/PONG, CLOSE с кодом</p>
+                </div>
+                <div class="feature">
+                    <h3>Валидация UTF-8</h3>
+                    <p>Инкрементальная проверка TEXT-сообщений по границам фрагментов (RFC 3629)</p>
+                </div>
+                <div class="feature">
+                    <h3>SO_REUSEPORT</h3>
+                    <p>Ядро распределяет входящие подключения между Listener потоками</p>
+                </div>
+                <div class="feature">
+                    <h3>EPOLLONESHOT</h3>
+                    <p>Гарантия «одно соединение — не более одного потока одновременно» без мьютексов на сокете</p>
+                </div>
+                <div class="feature">
+                    <h3>Backpressure без потерь</h3>
+                    <p>Park/resume источников по водяным знакам вместо буферизации без предела или дропа</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Архитектура</h2>
+            <pre class="code-block">
+  ws1 ─┐   accept          ingest-epoll (ET+ONESHOT)        Queue&lt;Conn*&gt;       worker pool
+  ws2 ─┤ ───────────────►  listener'ы                 ─────────────────────►   парсинг WS-кадров
+  ...  │                                                                            │
+  wsN ─┘                                                                            │ Msg_t
+                                                                     dataQueue (Queue_t) + eventfd
+                                                                                     │
+                                                              ┌──────────────────────┘
+                                                              ▼
+                                                   ┌── поток-агрегатор (один) ──┐
+                                                   │ epoll: dataQueue, ctrlQueue,│
+                                                   │  sink-fd, timerfd          │
+                                                   │ aggOnMessage()/aggOnTick() │──► выходной WS
+                                                   │ park/resume источников     │    (принят нами же)
+                                                   └────────────────────────────┘</pre>
+            <p style="margin-top:16px">Источники остаются под пулом воркеров (параллельная обработка);
+                выходное соединение обслуживает единственный поток-агрегатор — это единственный
+                писатель в единственный sink-сокет, поэтому кадр кодируется один раз и не требует
+                мьютексов при отправке.</p>
+        </section>
+
+        <section class="card">
+            <h2>State Machine соединения</h2>
+            <pre class="code-block">
+┌────────────────────┐   заголовки    ┌────────────────────┐
+│  ST_HANDSHAKE_READ  │───полностью───▶│  ST_HANDSHAKE_SEND │
+└────────────────────┘   получены     └──────────┬──────────┘
+                                                   │ 101 отправлен
+                              ┌────────────────────┼────────────────────┐
+                              ▼ role=SOURCE                              ▼ role=SINK
+                    ┌────────────────────┐                    передача агрегатору
+                    │     ST_WS_OPEN     │                    (DEL из ingest-epoll,
+                    │  разбор WS-кадров, │                     ADD в epoll агрегатора)
+                    │  backpressure      │
+                    └────────────────────┘</pre>
+        </section>
+
+        <section class="card">
+            <h2>Маршруты</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Путь</th>
+                        <th>Кто</th>
+                        <th>Описание</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>--sink-path</code> (по умолчанию <code>/feed</code>)</td>
+                        <td>выходной WS</td>
+                        <td>Единственный приёмник агрегированного потока; новое подключение замещает предыдущее (CLOSE 1001)</td>
+                    </tr>
+                    <tr>
+                        <td>любой другой путь с <code>Upgrade: websocket</code></td>
+                        <td>источник</td>
+                        <td>id источника сервер присваивает сам; сообщения тегируются и пересылаются приёмнику</td>
+                    </tr>
+                    <tr>
+                        <td>запрос без <code>Upgrade</code></td>
+                        <td>—</td>
+                        <td>400 Bad Request — статики сервер не отдаёт</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card">
+            <h2>Использование</h2>
+            <pre class="code-block">
+# Сборка
+make
+
+# Запуск
+./httpserver -p 33333 -w 8 -l 2 --sink-path /feed
+
+# Тестовый клиент (чистый stdlib, см. tests/ws_client.py)
+python3 tests/ws_client.py sink ws://127.0.0.1:33333/feed
+python3 tests/ws_client.py src  ws://127.0.0.1:33333/s1 --rate 5
+
+# Протокольные негативные кейсы (RFC 6455)
+python3 tests/ws_client.py fuzz ws://127.0.0.1:33333/s1
+
+# Живое демо в браузере
+open www/ws-demo.html   # открыть напрямую, сервер эту страницу не раздаёт</pre>
+        </section>
+
+        <section class="card">
+            <h2>Параметры сервера</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Опция</th>
+                        <th>По умолчанию</th>
+                        <th>Описание</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>-p, --port</code></td><td>33333</td><td>Порт для прослушивания</td></tr>
+                    <tr><td><code>-l, --listeners</code></td><td>2</td><td>Количество Listener потоков</td></tr>
+                    <tr><td><code>-w, --workers</code></td><td>8</td><td>Количество Worker потоков</td></tr>
+                    <tr><td><code>--sink-path</code></td><td>/feed</td><td>Путь для выходного WS</td></tr>
+                    <tr><td><code>--hwm</code> / <code>--lwm</code></td><td>256 / 128</td><td>Водяные знаки backpressure (сообщений в очереди агрегатора)</td></tr>
+                    <tr><td><code>--max-frame</code></td><td>65536</td><td>Максимальный размер одного WS-кадра, байт</td></tr>
+                    <tr><td><code>--max-message</code></td><td>4194304</td><td>Максимальный размер собранного (фрагментированного) сообщения</td></tr>
+                    <tr><td><code>--tick</code></td><td>1000</td><td>Период тика статистики/агрегации, мс</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Курсовая работа: Компьютерные сети | МГТУ им. Н.Э. Баумана, 2026</p>
+        </div>
+    </footer>
+</body>
+</html>

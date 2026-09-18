@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WS-агрегатор — Демо</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Стили, специфичные для демо-страницы — поверх общего style.css сайта */
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) {
+            .demo-grid { grid-template-columns: 1fr; }
+        }
+        .panel-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .panel-row input[type="text"] {
+            flex: 1;
+            min-width: 120px;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        button {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #3498db, #2c3e50);
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+        button:hover { transform: scale(1.04); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        button.secondary { background: #e9ecef; color: #2c3e50; }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: #f1f3f5;
+            color: #666;
+        }
+        .status .dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: #adb5bd;
+        }
+        .status.on { background: #e6f7ee; color: #1e7e45; }
+        .status.on .dot { background: #2ecc71; }
+        .status.off { background: #fdecec; color: #c0392b; }
+        .status.off .dot { background: #e74c3c; }
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 6px;
+            padding: 14px;
+            height: 320px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log .line { border-bottom: 1px solid #2a2a2a; padding: 3px 0; }
+        .log .line.sys { color: #7f9cf5; }
+        .log .line.err { color: #ff6b6b; }
+        .log .tag { color: #6bcB77; }
+        label.inline { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: #555; }
+        .hint { color: #888; font-size: 0.85rem; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>WS-агрегатор</h1>
+            <p class="subtitle">N источников &rarr; агрегация &rarr; один выходной WebSocket</p>
+            <nav class="nav-links">
+                <a href="index.html" class="nav-link">Документация</a>
+                <a href="ws-demo.html" class="nav-link active">Демо</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Как пользоваться</h2>
+            <p>
+                Эта страница — обычный статический HTML-файл с чистым <code>WebSocket</code> API,
+                сервер её НЕ раздаёт (раздача статики в проекте убрана — сервер целиком посвящён WS).
+                Откройте её напрямую (<code>file://</code>) или любым сторонним статик-сервером,
+                запустите <code>./httpserver</code> и укажите ниже адрес.
+            </p>
+            <div class="panel-row" style="margin-top:16px">
+                <label class="inline">Адрес сервера
+                    <input type="text" id="serverUrl" value="ws://127.0.0.1:33333" style="margin-left:8px">
+                </label>
+                <label class="inline">Путь приёмника
+                    <input type="text" id="sinkPath" value="/feed" style="margin-left:8px; max-width:120px">
+                </label>
+            </div>
+        </section>
+
+        <section class="demo-grid">
+            <div class="card">
+                <h2>Приёмник (sink)</h2>
+                <div class="panel-row">
+                    <button id="sinkConnect">Подключиться</button>
+                    <button id="sinkDisconnect" class="secondary" disabled>Отключиться</button>
+                    <span class="status off" id="sinkStatus"><span class="dot"></span>не подключён</span>
+                </div>
+                <div class="panel-row">
+                    <button id="sinkClear" class="secondary">Очистить лог</button>
+                    <span class="hint" id="sinkCount">получено: 0</span>
+                </div>
+                <div class="log" id="sinkLog"></div>
+                <p class="hint">Ровно один приёмник активен одновременно — новое подключение сюда
+                    замещает предыдущее (оно получит CLOSE 1001).</p>
+            </div>
+
+            <div class="card">
+                <h2>Источник (source)</h2>
+                <div class="panel-row">
+                    <label class="inline">Путь
+                        <input type="text" id="srcPath" value="/browser" style="margin-left:8px; max-width:120px">
+                    </label>
+                    <button id="srcConnect">Подключиться</button>
+                    <button id="srcDisconnect" class="secondary" disabled>Отключиться</button>
+                    <span class="status off" id="srcStatus"><span class="dot"></span>не подключён</span>
+                </div>
+                <div class="panel-row">
+                    <input type="text" id="srcText" placeholder="Текст сообщения..." disabled>
+                    <button id="srcSend" disabled>Отправить</button>
+                </div>
+                <div class="panel-row">
+                    <label class="inline">
+                        <input type="checkbox" id="srcAuto" disabled>
+                        Автоотправка каждые
+                    </label>
+                    <input type="text" id="srcInterval" value="500" style="max-width:70px" disabled> мс
+                    <span class="hint" id="srcCount">отправлено: 0</span>
+                </div>
+                <div class="log" id="srcLog"></div>
+                <p class="hint">Путь, отличный от пути приёмника, — это источник; id ему присваивает сервер сам.</p>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Что происходит на сервере</h2>
+            <p>Каждое текстовое сообщение источника агрегатор оборачивает тегом источника и меткой
+                времени и пересылает приёмнику как есть (шаг 1 — passthrough; дальше на этом месте
+                появятся окно/редьюс/join — см. <code>src/agg.c</code>):</p>
+            <div class="code-block">{"src": 7, "seq": 42, "t": 1699999999.123456, "data": "текст сообщения"}</div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>WebSocket-агрегатор · курсовая работа · МГТУ им. Н.Э. Баумана</p>
+        </div>
+    </footer>
+
+    <script>
+        function nowStr() {
+            const d = new Date();
+            return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+        }
+
+        function makeLogger(elId) {
+            const el = document.getElementById(elId);
+            return function (text, cls) {
+                const line = document.createElement('div');
+                line.className = 'line' + (cls ? ' ' + cls : '');
+                line.textContent = '[' + nowStr() + '] ' + text;
+                el.appendChild(line);
+                el.scrollTop = el.scrollHeight;
+            };
+        }
+
+        function setStatus(elId, connected, label) {
+            const el = document.getElementById(elId);
+            el.className = 'status ' + (connected ? 'on' : 'off');
+            el.innerHTML = '<span class="dot"></span>' + label;
+        }
+
+        function baseUrl() {
+            return document.getElementById('serverUrl').value.replace(/\/+$/, '');
+        }
+
+        /* ---------------- Приёмник (sink) ---------------- */
+        (function () {
+            const log = makeLogger('sinkLog');
+            let ws = null;
+            let count = 0;
+            const countEl = document.getElementById('sinkCount');
+            const connectBtn = document.getElementById('sinkConnect');
+            const disconnectBtn = document.getElementById('sinkDisconnect');
+
+            function connect() {
+                const path = document.getElementById('sinkPath').value || '/feed';
+                const url = baseUrl() + path;
+                log('подключение к ' + url + ' ...', 'sys');
+                ws = new WebSocket(url);
+                ws.onopen = function () {
+                    setStatus('sinkStatus', true, 'подключён');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    log('соединение открыто', 'sys');
+                };
+                ws.onmessage = function (ev) {
+                    count++;
+                    countEl.textContent = 'получено: ' + count;
+                    if (typeof ev.data === 'string') {
+                        log(ev.data);
+                    } else {
+                        log('(бинарные данные, ' + ev.data.size + ' байт)');
+                    }
+                };
+                ws.onclose = function (ev) {
+                    setStatus('sinkStatus', false, 'не подключён');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    log('соединение закрыто, код=' + ev.code + (ev.reason ? (' (' + ev.reason + ')') : ''), 'sys');
+                };
+                ws.onerror = function () {
+                    log('ошибка соединения', 'err');
+                };
+            }
+
+            connectBtn.addEventListener('click', connect);
+            disconnectBtn.addEventListener('click', function () { if (ws) ws.close(1000, 'manual'); });
+            document.getElementById('sinkClear').addEventListener('click', function () {
+                document.getElementById('sinkLog').innerHTML = '';
+            });
+        })();
+
+        /* ---------------- Источник (source) ---------------- */
+        (function () {
+            const log = makeLogger('srcLog');
+            let ws = null;
+            let count = 0;
+            let autoTimer = null;
+            const countEl = document.getElementById('srcCount');
+            const connectBtn = document.getElementById('srcConnect');
+            const disconnectBtn = document.getElementById('srcDisconnect');
+            const textInput = document.getElementById('srcText');
+            const sendBtn = document.getElementById('srcSend');
+            const autoCheck = document.getElementById('srcAuto');
+            const intervalInput = document.getElementById('srcInterval');
+
+            function setInputsEnabled(enabled) {
+                textInput.disabled = !enabled;
+                sendBtn.disabled = !enabled;
+                autoCheck.disabled = !enabled;
+                intervalInput.disabled = !enabled;
+            }
+
+            function send() {
+                const text = textInput.value || ('авто ' + (++count));
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                ws.send(text);
+                count++;
+                countEl.textContent = 'отправлено: ' + count;
+                log('-> ' + text);
+            }
+
+            function connect() {
+                const path = document.getElementById('srcPath').value || '/browser';
+                const url = baseUrl() + path;
+                log('подключение к ' + url + ' ...', 'sys');
+                ws = new WebSocket(url);
+                ws.onopen = function () {
+                    setStatus('srcStatus', true, 'подключён');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    setInputsEnabled(true);
+                    log('соединение открыто', 'sys');
+                };
+                ws.onclose = function (ev) {
+                    setStatus('srcStatus', false, 'не подключён');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    setInputsEnabled(false);
+                    autoCheck.checked = false;
+                    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+                    log('соединение закрыто, код=' + ev.code + (ev.reason ? (' (' + ev.reason + ')') : ''), 'sys');
+                };
+                ws.onerror = function () {
+                    log('ошибка соединения', 'err');
+                };
+            }
+
+            connectBtn.addEventListener('click', connect);
+            disconnectBtn.addEventListener('click', function () { if (ws) ws.close(1000, 'manual'); });
+            sendBtn.addEventListener('click', send);
+            textInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+
+            autoCheck.addEventListener('change', function () {
+                if (autoCheck.checked) {
+                    const ms = Math.max(50, parseInt(intervalInput.value, 10) || 500);
+                    autoTimer = setInterval(send, ms);
+                } else if (autoTimer) {
+                    clearInterval(autoTimer);
+                    autoTimer = null;
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

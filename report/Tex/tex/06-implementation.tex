@@ -1,0 +1,661 @@
+\chapter{Технологический раздел}
+В данном разделе описаны средства реализации и программная реализация
+основных компонентов многопоточногосервера.
+
+\section{Средства реализации}
+Для реализации сервера был выбран язык программирования C стандарта C17.
+Выбор обусловлен следующими причинами:
+\begin{itemize}
+	\item прямой доступ к системным вызовам Linux (epoll, sendfile);
+	\item полный контроль над управлением памятью;
+	\item совместимость с POSIX Threads.
+\end{itemize}
+
+Сборка проекта осуществляется с помощью утилиты GNU Make.
+Компиляция производится компилятором GCC с флагами
+\texttt{-Wall -Wextra -Wpedantic -std=c17}.
+В режиме отладки используется флаг \texttt{-g} и макрос \texttt{DEBUG},
+в режиме выпуска "--- флаг оптимизации \texttt{-O2}.
+
+\section{Реализация алгоритма работы потока слушателя}
+Поток слушатель выполняет приём входящих соединений
+и регистрацию клиентских событий через подсистему epoll.
+Каждый поток слушатель создаёт собственный серверный сокет
+с опцией \texttt{SO\_REUSEPORT}, что позволяет ядру Linux
+распределять входящие соединения между несколькими слушателями.
+
+\subsection{Установка неблокирующего режима}
+На листинге~\ref{lst:set_nonblocking} представлена функция перевода
+файлового дескриптора в неблокирующий режим с помощью системного вызова
+\texttt{fcntl}.
+
+\begin{lstlisting}[caption={Установка неблокирующего режима},label={lst:set_nonblocking},language=C]
+int setNonblocking(int fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        return 10;
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+        return 20;
+    return 0;
+}
+\end{lstlisting}
+
+\subsection{Обработка входящих подключений}
+Функция \texttt{connectionHandle}, представленная на листинге~\ref{lst:connection_handle},
+вызывается при готовности серверного сокета.
+
+
+\begin{lstlisting}[caption={Обработка входящих подключений},label={lst:connection_handle},language=C]
+void connectionHandle(int serverfd, int epollfd)
+{
+    while (1)
+    {
+        struct sockaddr_in clientAddr = {0};
+        socklen_t clientLen = sizeof(clientAddr);
+        int clientfd = accept(serverfd,
+            (struct sockaddr *)&clientAddr, &clientLen);
+
+        if (clientfd < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            break;
+        }
+
+        if (setNonblocking(clientfd) != 0)
+        {
+            close(clientfd);
+            continue;
+        }
+
+        Task_t *task = createTask(clientfd, epollfd);
+        if (!task)
+        {
+            close(clientfd);
+            continue;
+        }
+
+        inet_ntop(AF_INET, &clientAddr.sin_addr,
+                  task->clientip, sizeof(task->clientip));
+
+        struct epoll_event ev = {0};
+        ev.data.ptr = task;
+        ev.events = EPOLLIN | EPOLLET
+                  | EPOLLRDHUP | EPOLLONESHOT;
+
+        if (epoll_ctl(epollfd, EPOLL_CTL_ADD,
+                      clientfd, &ev) == -1)
+        {
+            deleteTask(task);
+            close(clientfd);
+            continue;
+        }
+    }
+}
+\end{lstlisting}
+
+\subsection{Реализация алгоритма потока слушателя}
+На листинге~\ref{lst:listener_thread} представлена функция потока слушателя.
+
+
+\begin{lstlisting}[caption={Реализация потока слушателя},label={lst:listener_thread},language=C]
+void *listenerThread(void *args)
+{
+    ServerConfig_t *conf = (ServerConfig_t *)args;
+
+    int serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverfd < 0)
+        return NULL;
+
+    int opt = 1;
+    setsockopt(serverfd, SOL_SOCKET, SO_REUSEPORT,
+               &opt, sizeof(opt));
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(conf->port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    bind(serverfd, (struct sockaddr *)&addr, sizeof(addr));
+    listen(serverfd, MAXCON);
+    setNonblocking(serverfd);
+
+    int epollfd = epoll_create1(0);
+
+    struct epoll_event ev = {0};
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.fd = serverfd;
+    epoll_ctl(epollfd, EPOLL_CTL_ADD, serverfd, &ev);
+
+    /* Таймер статистики (каждые 5 секунд) */
+    int timerfd = timerfd_create(CLOCK_MONOTONIC,
+                                 TFD_NONBLOCK);
+    struct itimerspec timer_spec = {0};
+    timer_spec.it_value.tv_sec = 5;
+    timer_spec.it_interval.tv_sec = 5;
+    timerfd_settime(timerfd, 0, &timer_spec, NULL);
+    ev.data.fd = timerfd;
+    ev.events = EPOLLIN;
+    epoll_ctl(epollfd, EPOLL_CTL_ADD, timerfd, &ev);
+
+    /* eventfd для сигнала завершения */
+    ev.data.fd = conf->shutdownfd;
+    ev.events = EPOLLIN;
+    epoll_ctl(epollfd, EPOLL_CTL_ADD,
+              conf->shutdownfd, &ev);
+
+    struct epoll_event events[MAXEVENTS];
+
+    while (!conf->shutdown)
+    {
+        int nfds = epoll_wait(epollfd, events,
+                              MAXEVENTS, 1000);
+        if (nfds == -1)
+        {
+            if (errno == EINTR) continue;
+            break;
+        }
+
+        for (int i = 0; i < nfds; ++i)
+        {
+            if (events[i].data.fd == conf->shutdownfd)
+                goto cleanup;
+            else if (events[i].data.fd == serverfd)
+                connectionHandle(serverfd, epollfd);
+            else if (events[i].data.fd == timerfd)
+                timerHandle(timerfd);
+            else
+            {
+                Task_t *task =
+                    (Task_t *)events[i].data.ptr;
+                if (events[i].events
+                    & (EPOLLRDHUP | EPOLLHUP))
+                {
+                    epoll_ctl(epollfd, EPOLL_CTL_DEL,
+                              task->clientfd, NULL);
+                    close(task->clientfd);
+                    deleteTask(task);
+                    continue;
+                }
+                push(conf->queue, task);
+            }
+        }
+    }
+
+cleanup:
+    close(timerfd);
+    close(epollfd);
+    close(serverfd);
+    return NULL;
+}
+\end{lstlisting}
+
+\section{Реализация алгоритма работы потока обработчика}
+Поток-обработчик извлекает задачи из очереди и обрабатывает HTTP-запросы
+в соответствии с конечным автоматом клиентского соединения.
+
+\begin{lstlisting}[caption={Реализация функции чтения HTTP-запроса},label={lst:reading_handle},language=C]
+int readingHandle(Task_t *task)
+{
+    while (1)
+    {
+        if (task->readPos >= task->readLen - 1)
+            return -1;
+
+        ssize_t n = recv(task->clientfd,
+                        task->readBuf + task->readPos,
+                        task->readLen - task->readPos - 1,
+                        MSG_DONTWAIT);
+        if (n > 0)
+        {
+            task->readPos += n;
+            task->readBuf[task->readPos] = '\0';
+            task->lastActivity = time(NULL);
+            if (strstr(task->readBuf, "\r\n\r\n"))
+            {
+                task->state = SENDING_HEADERS;
+                return 1;
+            }
+        }
+        else if (n == 0)
+            return -1;
+        else
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return 0;
+            return -1;
+        }
+    }
+}
+\end{lstlisting}
+
+\subsection{Реализация функции парсинга HTTP-запроса}
+На листинге~\ref{lst:parse_request} представлена функция разбора HTTP-запроса.
+
+\begin{lstlisting}[caption={Реализация функции парсинг HTTP-запроса},label={lst:parse_request},language=C]
+int parseRequest(Task_t *task)
+{
+    char *buf = task->readBuf;
+
+    if (strncmp(buf, "GET ", 4) == 0)
+    {
+        task->method = GET;
+        buf += 4;
+    }
+    else if (strncmp(buf, "HEAD ", 5) == 0)
+    {
+        task->method = HEAD;
+        buf += 5;
+    }
+    else
+    {
+        task->method = UNKNOWN;
+        task->statusCode = 405;
+        return 0;
+    }
+
+    char *pathStart = buf;
+    char *pathEnd = strchr(buf, ' ');
+    if (!pathEnd)
+    {
+        task->statusCode = 400;
+        return -1;
+    }
+
+    size_t pathLen = pathEnd - pathStart;
+    task->targetPath = malloc(pathLen + 1);
+    if (!task->targetPath)
+    {
+        task->statusCode = 500;
+        return -1;
+    }
+    memcpy(task->targetPath, pathStart, pathLen);
+    task->targetPath[pathLen] = '\0';
+
+    if (strstr(task->targetPath, ".."))
+    {
+        task->statusCode = 403;
+        return 0;
+    }
+
+    char *connHeader =
+        strcasestr(task->readBuf, "\r\nConnection:");
+    if (connHeader)
+    {
+        connHeader += 13;
+        while (*connHeader == ' ') connHeader++;
+        if (strncasecmp(connHeader, "close", 5) == 0)
+            task->keepAlive = 0;
+    }
+    return 0;
+}
+\end{lstlisting}
+
+\subsection{Реализация функции формирования HTTP-ответа}
+На листинге~\ref{lst:prepare_response} представлена функция формирования
+HTTP-ответа. 
+\begin{lstlisting}[caption={Реализация функции формирования HTTP-ответа},label={lst:prepare_response},language=C]
+int prepareResponse(Task_t *task)
+{
+    char filepath[512];
+    struct stat st;
+    const char *mimeType = "text/html";
+    const char *body = NULL;
+    size_t bodyLen = 0;
+
+    if (task->statusCode == 200)
+    {
+        const char *target =
+            (strcmp(task->targetPath, "/") == 0)
+            ? "/index.html" : task->targetPath;
+        snprintf(filepath, sizeof(filepath),
+                 "%s%s", WWW_ROOT, target);
+
+        task->filefd = open(filepath, O_RDONLY);
+        if (task->filefd < 0)
+            task->statusCode = 404;
+        else if (fstat(task->filefd, &st) < 0
+                 || !S_ISREG(st.st_mode))
+        {
+            close(task->filefd);
+            task->filefd = -1;
+            task->statusCode = 404;
+        }
+        else
+        {
+            task->fileSize = st.st_size;
+            mimeType = getMimeType(filepath);
+        }
+    }
+
+    if (task->statusCode != 200)
+    {
+        if (task->filefd >= 0)
+        {
+            close(task->filefd);
+            task->filefd = -1;
+        }
+        task->fileSize = 0;
+        switch (task->statusCode)
+        {
+            case 403: body = ERROR_403_BODY; break;
+            case 404: body = ERROR_404_BODY; break;
+            case 405: body = ERROR_405_BODY; break;
+            default:  body = ERROR_500_BODY; break;
+        }
+        bodyLen = strlen(body);
+    }
+
+    size_t contentLength =
+        (task->filefd >= 0) ? task->fileSize : bodyLen;
+
+    char headers[1024];
+    int headersLen = snprintf(headers, sizeof(headers),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: %s\r\n\r\n",
+        task->statusCode,
+        getStatusText(task->statusCode),
+        mimeType, contentLength,
+        task->keepAlive ? "keep-alive" : "close");
+
+    size_t totalSize = headersLen
+                     + (body ? bodyLen : 0);
+    task->writeBuf = malloc(totalSize);
+    if (!task->writeBuf)
+        return -1;
+
+    memcpy(task->writeBuf, headers, headersLen);
+    if (body)
+        memcpy(task->writeBuf + headersLen,
+               body, bodyLen);
+
+    task->writeLen = totalSize;
+    task->writePos = 0;
+    return 0;
+}
+\end{lstlisting}
+
+\subsection{Реализация функции отправки HTTP-заголовков}
+На листинге~\ref{lst:sending_headers} представлена функция отправки
+HTTP-заголовков клиенту.
+
+\begin{lstlisting}[caption={Реализация функции отправки HTTP-заголовков},label={lst:sending_headers},language=C]
+int sendingHeadersHandle(Task_t *task)
+{
+    while (task->writePos < task->writeLen)
+    {
+        ssize_t n = send(task->clientfd,
+                         task->writeBuf + task->writePos,
+                         task->writeLen - task->writePos,
+                         MSG_DONTWAIT);
+        if (n > 0)
+            task->writePos += n;
+        else if (n < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return 0;
+            return -1;
+        }
+    }
+
+    if (task->filefd >= 0 && task->method == GET)
+        task->state = SENDING_BODY;
+    else
+        task->state = DONE;
+    return 1;
+}
+\end{lstlisting}
+
+\subsection{Реализация функции отправки тела ответа}
+На листинге~\ref{lst:sending_body} представлена функция отправки
+тела ответа. 
+\begin{lstlisting}[caption={Реализация функции отправки тела ответа через sendfile},label={lst:sending_body},language=C]
+int sendingBodyHandle(Task_t *task)
+{
+    while (task->filePos < task->fileSize)
+    {
+        off_t offset = task->filePos;
+        ssize_t sent = sendfile(task->clientfd,
+            task->filefd, &offset,
+            task->fileSize - task->filePos);
+
+        if (sent > 0)
+            task->filePos += sent;
+        else if (sent < 0)
+        {
+            if (errno == EAGAIN
+                || errno == EWOULDBLOCK)
+                return 0;
+            return -1;
+        }
+    }
+    task->state = DONE;
+    return 1;
+}
+\end{lstlisting}
+
+\subsection{Реализация функции перерегистрации дескриптора в epoll}
+На листинге~\ref{lst:rearm_epoll} представлена функция перерегистрации
+дескриптора в epoll после обработки. 
+\begin{lstlisting}[caption={Реализация функции перерегистрации дескриптора в epoll},label={lst:rearm_epoll},language=C]
+void rearmEpoll(Task_t *task, uint32_t events)
+{
+    struct epoll_event ev = {0};
+    ev.data.ptr = task;
+    ev.events = events | EPOLLET
+              | EPOLLRDHUP | EPOLLONESHOT;
+    epoll_ctl(task->epollfd, EPOLL_CTL_MOD,
+              task->clientfd, &ev);
+}
+\end{lstlisting}
+
+\subsection{Реализация функции потока обработчика}
+На листинге~\ref{lst:worker_thread} представлена функция потока обработчика.
+Поток в цикле извлекает задачи из очереди и обрабатывает их
+в соответствии с текущим состоянием конечного автомата.
+Переходы между состояниями:
+\texttt{READING} $\rightarrow$ \texttt{SENDING\_HEADERS} $\rightarrow$ \texttt{SENDING\_BODY} $\rightarrow$ \texttt{DONE}.
+При поддержке keep-alive после состояния \texttt{DONE}
+соединение возвращается в состояние \texttt{READING}
+для обработки следующего запроса.
+При ошибке \texttt{EAGAIN} дескриптор перерегистрируется в epoll,
+и задача возвращается в пул событий.
+
+\begin{lstlisting}[caption={Реализация функции потока обработчика},label={lst:worker_thread},language=C]
+void *workerThread(void *args)
+{
+    ServerConfig_t *conf = (ServerConfig_t *)args;
+    int needClose;
+
+    while (!conf->shutdown)
+    {
+        Task_t *task = NULL;
+        needClose = 0;
+
+        if (pop(conf->queue, &task) != 0)
+            break;
+        if (!task)
+            continue;
+
+        atomic_fetch_add(&total_requests, 1);
+
+        switch (task->state)
+        {
+        case READING:
+        {
+            int rc = readingHandle(task);
+            if (rc == 1)
+            {
+                if (parseRequest(task) < 0
+                    || prepareResponse(task) < 0)
+                {
+                    needClose = 1; break;
+                }
+                rc = sendingHeadersHandle(task);
+                if (rc == 0)
+                {
+                    rearmEpoll(task, EPOLLOUT);
+                    continue;
+                }
+                else if (rc < 0)
+                {
+                    needClose = 1; break;
+                }
+                if (task->state == SENDING_BODY)
+                {
+                    rc = sendingBodyHandle(task);
+                    if (rc == 0)
+                    {
+                        rearmEpoll(task, EPOLLOUT);
+                        continue;
+                    }
+                    else if (rc < 0)
+                    {
+                        needClose = 1; break;
+                    }
+                }
+            }
+            else if (rc == 0)
+            {
+                rearmEpoll(task, EPOLLIN);
+                continue;
+            }
+            else
+            {
+                needClose = 1; break;
+            }
+        }
+        /* fallthrough */
+        case SENDING_HEADERS:
+        {
+            int rc = sendingHeadersHandle(task);
+            if (rc == 0)
+            {
+                rearmEpoll(task, EPOLLOUT);
+                continue;
+            }
+            else if (rc < 0)
+            {
+                needClose = 1; break;
+            }
+            if (task->state != SENDING_BODY)
+                break;
+        }
+        /* fallthrough */
+        case SENDING_BODY:
+        {
+            int rc = sendingBodyHandle(task);
+            if (rc == 0)
+            {
+                rearmEpoll(task, EPOLLOUT);
+                continue;
+            }
+            else if (rc < 0)
+            {
+                needClose = 1; break;
+            }
+        }
+        /* fallthrough */
+        case DONE:
+            if (task->keepAlive)
+            {
+                close(task->filefd);
+                task->filefd = -1;
+                free(task->writeBuf);
+                task->writeBuf = NULL;
+                free(task->targetPath);
+                task->targetPath = NULL;
+                task->state = READING;
+                task->readPos = 0;
+                task->writeLen = 0;
+                task->writePos = 0;
+                task->fileSize = 0;
+                task->filePos = 0;
+                task->statusCode = 200;
+                task->method = UNKNOWN;
+                rearmEpoll(task, EPOLLIN);
+                continue;
+            }
+            needClose = 1;
+            break;
+        }
+
+        if (needClose)
+        {
+            epoll_ctl(task->epollfd, EPOLL_CTL_DEL,
+                      task->clientfd, NULL);
+            close(task->clientfd);
+            deleteTask(task);
+        }
+    }
+    return NULL;
+}
+\end{lstlisting}
+
+\section{Реализация алгоритма работы главного потока сервера}
+Главный поток сервера выполняет инициализацию всех подсистем
+и ожидает сигнал завершения. На листинге~\ref{lst:main_server}
+представлена функция \texttt{main}
+
+\begin{lstlisting}[caption={Реализация функции главного потока сервера},label={lst:main_server},language=C]
+int main(int argc, char **argv)
+{
+    ServerConfig_t conf = {0};
+    int rc = parseArgs(argc, argv, &conf);
+    if (rc != 0)
+        return (rc == 1) ? EXIT_SUCCESS : EXIT_FAILURE;
+
+    signal(SIGPIPE, SIG_IGN);
+    init_logger("logs/server.log");
+
+    sigset_t sigset;
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGINT);
+    sigaddset(&sigset, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+
+    conf.queue = createQueue();
+    conf.shutdown = 0;
+    conf.shutdownfd = eventfd(0, EFD_NONBLOCK);
+
+    pthread_t *workers =
+        calloc(conf.workers, sizeof(pthread_t));
+    pthread_t *listeners =
+        calloc(conf.listeners, sizeof(pthread_t));
+
+    /* Создание пулов потоков */
+    for (int i = 0; i < conf.workers; ++i)
+        pthread_create(&workers[i], NULL,
+                       &workerThread, &conf);
+    for (int i = 0; i < conf.listeners; ++i)
+        pthread_create(&listeners[i], NULL,
+                       &listenerThread, &conf);
+
+    /* Ожидание сигнала завершения */
+    int sig;
+    sigwait(&sigset, &sig);
+
+    /* Корректное завершение */
+    conf.shutdown = 1;
+    shutdownQueue(conf.queue);
+
+    uint64_t val = 1;
+    write(conf.shutdownfd, &val, sizeof(val));
+
+    for (int i = 0; i < conf.listeners; ++i)
+        pthread_join(listeners[i], NULL);
+    for (int i = 0; i < conf.workers; ++i)
+        pthread_join(workers[i], NULL);
+
+    free(workers);
+    free(listeners);
+    close(conf.shutdownfd);
+    deleteQueue(conf.queue);
+    close_logger();
+    return EXIT_SUCCESS;
+}
+\end{lstlisting}
+

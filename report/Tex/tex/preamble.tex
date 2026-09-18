@@ -1,0 +1,140 @@
+\usepackage{enumitem}
+\setenumerate[0]{label=\arabic*)} % Изменение вида нумерации списков
+\renewcommand{\labelitemi}{---}
+
+%==========Для подключения русского языка=====================
+\usepackage{fontspec} % Подключаем пакет для работы со шрифтами
+\setmainfont{Times New Roman} % указывает XeLaTeX какой шрифт использовать
+\usepackage[utf8]{inputenc}     % Поддержка UTF-8
+%=============================================================
+
+
+\usepackage{caption}
+\captionsetup[table]{justification=raggedright,singlelinecheck=off} % Изменение подписей к таблицам
+\captionsetup{labelsep=endash, justification=centering} % Настройка подписей float объектов
+\captionsetup[figure]{name=Рисунок} % Изменение подписей к рисункам
+
+\usepackage{geometry}
+\geometry{a4paper,left=3.1cm,right=1.1cm,top=2cm,bottom=2cm,bindingoffset=0cm}
+%\geometry{left=30mm}
+%\geometry{right=15mm}
+%\geometry{top=20mm}
+%\geometry{bottom=20mm}
+\setlength{\parindent}{1.25cm}
+%\linespread{1.5}
+
+% --- Пакеты для красивого оформления алгоритмов ---
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+
+%===========ОПЦИОНАЛЬНО==========
+
+\addbibresource{biblio.bib}
+
+%\usepackage[T1]{fontenc}
+%\usepackage{lmodern}
+
+\usepackage{multirow}
+\usepackage{makecell}
+
+\usepackage{ulem} % Нормальное нижнее подчеркивание
+% Дополнительное окружения для подписей
+\usepackage{array}
+\newenvironment{signstabular}[1][1]{
+	\renewcommand*{\arraystretch}{#1}
+	\tabular
+}{
+	\endtabular
+}
+\def\arraybackslash{\let\\\tabularnewline}
+
+\usepackage{pdfpages}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.9}
+\usetikzlibrary{datavisualization}
+\usetikzlibrary{datavisualization.formats.functions}
+\usepackage{csvsimple} % генерим таблички из csv
+
+\usepackage{graphicx}
+\newcommand{\imgHeight}[3] {
+	\begin{figure}[H]
+		\center{\includegraphics[height=#1]{inc/img/#2}}
+		\caption{#3}
+		\label{img:#2}
+	\end{figure}
+}
+
+\newcommand{\imgWid}[3] {
+	\begin{figure}[H]
+		\center{\includegraphics[width=#1]{inc/img/#2}}
+		\caption{#3}
+		\label{img:#2}
+	\end{figure}
+}
+
+\newcommand{\imgScale}[3] {
+	\begin{figure}[h!]
+		\center{\includegraphics[scale=#1]{inc/img/#2}}
+		\caption{#3}
+		\label{img:#2}
+	\end{figure}
+}
+
+\usepackage{listingsutf8}
+\lstset{columns=fixed,basicstyle=\small,breaklines=true,inputencoding=utf8,keywordstyle=\bfseries\underbar,frame=single,tabsize=2,xleftmargin=20pt,xrightmargin=5pt}
+%\lstset{language=sql}
+\lstset{numbers=left,numberstyle=\small}
+
+\lstset{extendedchars=\true}
+
+% \usepackage{listings}
+% \usepackage{xcolor}
+% \lstset{ %
+% 	basicstyle=\small\sffamily,			% размер и начертание шрифта для подсветки кода
+% 	numbers=left,						% где поставить нумерацию строк (слева\справа)
+% 	stepnumber=1,						% размер шага между двумя номерами строк
+% 	numbersep=5pt,						% как далеко отстоят номера строк от подсвечиваемого кода
+% 	frame=single,						% рисовать рамку вокруг кода
+% 	tabsize=4,							% размер табуляции по умолчанию равен 4 пробелам
+% 	captionpos=t,						% позиция заголовка вверху [t] или внизу [b]
+% 	breaklines=true,					
+% 	breakatwhitespace=true,				% переносить строки только если есть пробел
+% 	escapeinside={\#*}{*)},				% если нужно добавить комментарии в коде
+% 	backgroundcolor=\color{white},
+% }
+% Команда для римских цифр
+%\newcommand{\rom}[1]{\MakeUppercase{\romannumeral #1}}
+\usepackage{placeins}
+
+\usepackage{xcolor}
+\usepackage{listings}
+
+% --- Настройка стиля листингов ---
+% --- Настройка стиля листингов ---
+\lstset{
+	language=C++,
+%	basicstyle=\footnotesize\fontfamily{ccr}\selectfont, % ccr = Courier
+	basicstyle=\footnotesize\ttfamily,
+	numbers=left,
+	numberstyle=\tiny\color{gray},
+	frame=tb,
+	tabsize=4,
+	showstringspaces=false,
+	breaklines=true,
+	keywordstyle=\color{blue},
+	commentstyle=\color{green!40!black},
+	stringstyle=\color{purple},
+	backgroundcolor=\color{black!5},
+	extendedchars=true,  % Включаем поддержку расширенных символов
+	literate= {А}{{\CYRA}}1 {Б}{{\CYRB}}1 {В}{{\CYRV}}1 {Г}{{\CYRG}}1 {Д}{{\CYRD}}1 {Е}{{\CYRE}}1 {Ё}{{\CYRYO}}1
+	{Ж}{{\CYRZH}}1 {З}{{\CYRZ}}1 {И}{{\CYRI}}1 {Й}{{\CYRI breve}}1 {К}{{\CYRK}}1 {Л}{{\CYRL}}1 {М}{{\CYRM}}1
+	{Н}{{\CYRN}}1 {О}{{\CYRO}}1 {П}{{\CYRP}}1 {Р}{{\CYRR}}1 {С}{{\CYRS}}1 {Т}{{\CYRT}}1 {У}{{\CYRU}}1
+	{Ф}{{\CYRF}}1 {Х}{{\CYRH}}1 {Ц}{{\CYRC}}1 {Ч}{{\CYRCH}}1 {Ш}{{\CYRSH}}1 {Щ}{{\CYRSHCH}}1
+	{Ъ}{{\CYRHardSign}}1 {Ы}{{\CYRY}}1 {Ь}{{\CYRSoftSign}}1 {Э}{{\CYRE}}1 {Ю}{{\CYRYU}}1 {Я}{{\CYRYA}}1
+	{а}{{\cyra}}1 {б}{{\cyrb}}1 {в}{{\cyrv}}1 {г}{{\cyrg}}1 {д}{{\cyrd}}1 {е}{{\cyre}}1 {ё}{{\cyryo}}1
+	{ж}{{\cyrzh}}1 {з}{{\cyrz}}1 {и}{{\cyri}}1 {й}{{\cyri breve}}1 {к}{{\cyrk}}1 {л}{{\cyrl}}1 {м}{{\cyrm}}1
+	{н}{{\cyrn}}1 {о}{{\cyro}}1 {п}{{\cyrp}}1 {р}{{\cyrr}}1 {с}{{\cyrs}}1 {т}{{\cyrt}}1 {у}{{\cyru}}1
+	{ф}{{\cyrf}}1 {х}{{\cyrh}}1 {ц}{{\cyrc}}1 {ч}{{\cyrch}}1 {ш}{{\cyrsh}}1 {щ}{{\cyrshch}}1
+	{ъ}{{\cyrhard}}1 {ы}{{\cyry}}1 {ь}{{\cyrsoft}}1 {э}{{\cyre}}1 {ю}{{\cyryu}}1 {я}{{\cyrya}}1
+}

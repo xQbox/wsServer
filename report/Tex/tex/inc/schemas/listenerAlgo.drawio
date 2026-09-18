@@ -1,0 +1,94 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" version="29.3.7">
+  <diagram name="Страница-1" id="K92r_ouYZyU_MqZDl_zw">
+    <mxGraphModel dx="1940" dy="1140" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="WhiMvxspvkeybslrz19O-23" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-1" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.terminator;whiteSpace=wrap;" value="Начало" vertex="1">
+          <mxGeometry height="60" width="100" x="364" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-24" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-2" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Инициализация таймера" vertex="1">
+          <mxGeometry height="60" width="120" x="354" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-25" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-3" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Создать сокет;&lt;br&gt;Разрешить разделение сокета;" vertex="1">
+          <mxGeometry height="60" width="120" x="354" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-26" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="WhiMvxspvkeybslrz19O-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-4" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Сделать сокет неблокирующим;&lt;br&gt;Добавить в epoll;" vertex="1">
+          <mxGeometry height="60" width="120" x="354" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-27" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-5" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Сделать сокет неблокирующим" vertex="1">
+          <mxGeometry height="60" width="120" x="354" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-28" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-7" parent="1" style="shape=loopLimit;whiteSpace=wrap;html=1;" value="Пока не получен сигнал завершения" vertex="1">
+          <mxGeometry height="60" width="121" x="354" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-29" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-8" parent="1" style="shape=loopLimit;whiteSpace=wrap;html=1;" value="Для каждого отслеживаемого события на ф.д." vertex="1">
+          <mxGeometry height="60" width="121" x="353" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-12" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-13" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-9" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="Новый клиент?" vertex="1">
+          <mxGeometry height="70" width="80" x="375" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-16" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-10" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Обработка подключения" vertex="1">
+          <mxGeometry height="60" width="120" x="464" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-15" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-11" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Добавить работу в очередь" vertex="1">
+          <mxGeometry height="60" width="120" x="255" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-20" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-14" parent="1" style="shape=loopLimit;whiteSpace=wrap;html=1;direction=west;" value="Конец цикла по событиям" vertex="1">
+          <mxGeometry height="60" width="121" x="353" y="770" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-21" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="WhiMvxspvkeybslrz19O-18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-17" parent="1" style="shape=loopLimit;whiteSpace=wrap;html=1;direction=west;" value="Конец цикла&amp;nbsp;" vertex="1">
+          <mxGeometry height="60" width="121" x="352" y="850" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-18" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Освобождение ресурсов" vertex="1">
+          <mxGeometry height="60" width="120" x="353" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-19" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.terminator;whiteSpace=wrap;" value="Конец" vertex="1">
+          <mxGeometry height="60" width="100" x="362.5" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="WhiMvxspvkeybslrz19O-22" edge="1" parent="1" source="WhiMvxspvkeybslrz19O-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" target="WhiMvxspvkeybslrz19O-19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
