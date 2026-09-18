@@ -155,7 +155,8 @@ def connect(url, timeout=5):
             if k.strip().lower() == "sec-websocket-accept":
                 accept = v.strip()
     if accept != expected_accept(key):
-        raise RuntimeError("неверный Sec-WebSocket-Accept: получено {!r}".format(accept))
+        raise RuntimeError(
+            "неверный Sec-WebSocket-Accept: получено {!r}".format(accept))
 
     conn = WSConn(sock)
     conn.buf = tail
@@ -188,7 +189,8 @@ def cmd_src(args):
     interval = 1.0 / args.rate if args.rate > 0 else 0
     try:
         while args.count == 0 or count < args.count:
-            msg = args.text if args.text else "msg-{} t={:.6f}".format(count, time.time())
+            msg = args.text if args.text else "msg-{} t={:.6f}".format(
+                count, time.time())
             conn.send_frame(OP_TEXT, msg.encode())
             count += 1
             if args.verbose:
@@ -223,7 +225,8 @@ def cmd_sink(args):
         while args.count == 0 or count < args.count:
             opcode, payload, _fin = conn.recv_frame()
             if opcode == OP_CLOSE:
-                code = struct.unpack("!H", payload[:2])[0] if len(payload) >= 2 else None
+                code = struct.unpack("!H", payload[:2])[
+                    0] if len(payload) >= 2 else None
                 print("получен CLOSE, код={}".format(code))
                 break
             if opcode == OP_PING:
@@ -231,7 +234,8 @@ def cmd_sink(args):
                 continue
             if opcode in (OP_TEXT, OP_BIN):
                 count += 1
-                text = payload.decode(errors="replace") if opcode == OP_TEXT else repr(payload)
+                text = payload.decode(
+                    errors="replace") if opcode == OP_TEXT else repr(payload)
                 print("[{}] {}".format(count, text))
     except socket.timeout:
         print("таймаут ожидания сообщений")
@@ -251,7 +255,8 @@ def cmd_slow_sink(args):
     if conn is None:
         print("рукопожатие не удалось:", status)
         sys.exit(1)
-    print("подключён как МЕДЛЕННЫЙ приёмник (не читает), {}, держим {}с".format(status, args.hold))
+    print("подключён как МЕДЛЕННЫЙ приёмник (не читает), {}, держим {}с".format(
+        status, args.hold))
     time.sleep(args.hold)
     conn.sock.close()
     print("slow-sink: соединение закрыто по таймауту удержания")
@@ -298,29 +303,34 @@ def cmd_fuzz(args):
         conn, status, _ = connect(args.url)
         if conn is None:
             return "handshake failed: " + status
-        conn.send_raw(raw_client_frame(0x83, 2, b"hi"))  # opcode 0x3, зарезервирован
+        # opcode 0x3, зарезервирован
+        conn.send_raw(raw_client_frame(0x83, 2, b"hi"))
         return _read_close_or_drop(conn)
 
     def case_cont_no_open():
         conn, status, _ = connect(args.url)
         if conn is None:
             return "handshake failed: " + status
-        conn.send_raw(raw_client_frame(0x80, 2, b"hi"))  # FIN + CONT без открытого сообщения
+        # FIN + CONT без открытого сообщения
+        conn.send_raw(raw_client_frame(0x80, 2, b"hi"))
         return _read_close_or_drop(conn)
 
     def case_new_msg_while_fragmenting():
         conn, status, _ = connect(args.url)
         if conn is None:
             return "handshake failed: " + status
-        conn.send_raw(raw_client_frame(0x01, 2, b"ab"))  # FIN=0 TEXT — открыли сообщение
-        conn.send_raw(raw_client_frame(0x82, 2, b"cd"))  # новый BIN вместо CONT
+        # FIN=0 TEXT — открыли сообщение
+        conn.send_raw(raw_client_frame(0x01, 2, b"ab"))
+        # новый BIN вместо CONT
+        conn.send_raw(raw_client_frame(0x82, 2, b"cd"))
         return _read_close_or_drop(conn)
 
     def case_frag_ping():
         conn, status, _ = connect(args.url)
         if conn is None:
             return "handshake failed: " + status
-        conn.send_raw(raw_client_frame(0x09, 2, b"hi"))  # FIN=0 PING — запрещено
+        # FIN=0 PING — запрещено
+        conn.send_raw(raw_client_frame(0x09, 2, b"hi"))
         return _read_close_or_drop(conn)
 
     def case_close_len1():
@@ -358,7 +368,8 @@ def cmd_fuzz(args):
         conn, status, _ = connect(args.url)
         if conn is None:
             return "handshake failed: " + status
-        conn.send_raw(raw_client_frame(0x81, 2, b"\xc0\x80"))  # overlong-кодировка NUL
+        # overlong-кодировка NUL
+        conn.send_raw(raw_client_frame(0x81, 2, b"\xc0\x80"))
         return _read_close_or_drop(conn)
 
     def case_fragmented_valid():
@@ -382,14 +393,16 @@ def cmd_fuzz(args):
         ("RSV1 установлен -> 1002", case_rsv, 1002),
         ("зарезервированный opcode 0x3 -> 1002", case_reserved_opcode, 1002),
         ("CONT без открытого сообщения -> 1002", case_cont_no_open, 1002),
-        ("новое сообщение при открытом предыдущем -> 1002", case_new_msg_while_fragmenting, 1002),
+        ("новое сообщение при открытом предыдущем -> 1002",
+         case_new_msg_while_fragmenting, 1002),
         ("фрагментированный PING (FIN=0) -> 1002", case_frag_ping, 1002),
         ("CLOSE длиной 1 байт -> 1002", case_close_len1, 1002),
         ("CLOSE с запрещённым кодом 1005 -> 1002", case_bad_close_code, 1002),
         ("обычный CLOSE 1000 -> эхо 1000", case_normal_close, 1000),
         ("кадр больше --max-frame -> 1009", case_oversized, 1009),
         ("невалидный UTF-8 (overlong) -> 1007", case_bad_utf8, 1007),
-        ("валидная фрагментация + PING между частями -> pong:True", case_fragmented_valid, "pong:True"),
+        ("валидная фрагментация + PING между частями -> pong:True",
+         case_fragmented_valid, "pong:True"),
     ]
 
     passed = 0
@@ -399,7 +412,8 @@ def cmd_fuzz(args):
         except Exception as e:  # noqa: BLE001 — тестовый скрипт, репортим любую ошибку кейса
             got = "exception: {}".format(e)
         ok = (got == want)
-        print("[{}] {}: получено={} ожидалось={}".format("OK" if ok else "FAIL", name, got, want))
+        print("[{}] {}: получено={} ожидалось={}".format(
+            "OK" if ok else "FAIL", name, got, want))
         if ok:
             passed += 1
     print("{}/{} fuzz-кейсов пройдено".format(passed, len(cases)))
@@ -409,37 +423,48 @@ def cmd_fuzz(args):
 # --------------------------------------------------------------------- main
 
 def build_parser():
-    p = argparse.ArgumentParser(description="Тестовый WS-клиент для сервера-агрегатора")
+    p = argparse.ArgumentParser(
+        description="Тестовый WS-клиент для сервера-агрегатора")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     ph = sub.add_parser("handshake", help="разовое рукопожатие")
     ph.add_argument("url")
     ph.set_defaults(func=cmd_handshake)
 
-    ps = sub.add_parser("src", help="подключиться как источник и слать сообщения")
+    ps = sub.add_parser(
+        "src", help="подключиться как источник и слать сообщения")
     ps.add_argument("url")
-    ps.add_argument("--rate", type=float, default=1.0, help="сообщений в секунду (0 = без ограничения)")
-    ps.add_argument("--count", type=int, default=0, help="сколько сообщений отправить (0 = по --seconds)")
-    ps.add_argument("--seconds", type=float, default=0, help="сколько секунд слать (0 = по --count)")
-    ps.add_argument("--text", default=None, help="фиксированный текст вместо автогенерируемого")
+    ps.add_argument("--rate", type=float, default=1.0,
+                    help="сообщений в секунду (0 = без ограничения)")
+    ps.add_argument("--count", type=int, default=0,
+                    help="сколько сообщений отправить (0 = по --seconds)")
+    ps.add_argument("--seconds", type=float, default=0,
+                    help="сколько секунд слать (0 = по --count)")
+    ps.add_argument("--text", default=None,
+                    help="фиксированный текст вместо автогенерируемого")
     ps.add_argument("--verbose", action="store_true")
     ps.set_defaults(func=cmd_src)
 
-    pk = sub.add_parser("sink", help="подключиться как приёмник и печатать входящее")
+    pk = sub.add_parser(
+        "sink", help="подключиться как приёмник и печатать входящее")
     pk.add_argument("url")
-    pk.add_argument("--count", type=int, default=0, help="сколько сообщений принять (0 = без ограничения)")
-    pk.add_argument("--timeout", type=float, default=0, help="таймаут ожидания сообщения, с (0 = бесконечно)")
+    pk.add_argument("--count", type=int, default=0,
+                    help="сколько сообщений принять (0 = без ограничения)")
+    pk.add_argument("--timeout", type=float, default=0,
+                    help="таймаут ожидания сообщения, с (0 = бесконечно)")
     pk.set_defaults(func=cmd_sink)
 
-    pss = sub.add_parser("slow-sink", help="подключиться как приёмник и НЕ читать (backpressure)")
+    pss = sub.add_parser(
+        "slow-sink", help="подключиться как приёмник и НЕ читать (backpressure)")
     pss.add_argument("url")
-    pss.add_argument("--hold", type=float, default=10.0, help="сколько секунд держать соединение не читая")
+    pss.add_argument("--hold", type=float, default=10.0,
+                     help="сколько секунд держать соединение не читая")
     pss.set_defaults(func=cmd_slow_sink)
 
     pf = sub.add_parser("fuzz", help="набор протокольных негативных кейсов")
     pf.add_argument("url")
     pf.add_argument("--max-frame", type=int, default=65536, dest="max_frame",
-                     help="должен совпадать с --max-frame сервера (по умолчанию 65536)")
+                    help="должен совпадать с --max-frame сервера (по умолчанию 65536)")
     pf.set_defaults(func=cmd_fuzz)
 
     return p

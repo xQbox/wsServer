@@ -1,0 +1,58 @@
+services:
+  mock-upstreams:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.python
+
+    command:
+      - python
+      - -u
+      - mock_upstreams.py
+
+
+  aggregator:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+
+    depends_on:
+      - mock-upstreams
+
+    ports:
+      - "33333:33333"
+
+    command:
+      - /bin/sh
+      - -c
+      - | 
+        set --
+
+        port=9001
+
+        while [ "$$port" -le 9100 ]; do
+          set -- "$$@" \
+            --upstream \
+            "ws://mock-upstreams:$$port"
+
+          port=$$((port + 1))
+        done
+
+        exec ./httpserver \
+          -p 33333 \
+          "$$@"
+
+
+  verifier:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.python
+
+    depends_on:
+      - aggregator
+
+    environment:
+      WS_URL: ws://aggregator:33333/feed
+
+    command:
+      - python
+      - verifier.py

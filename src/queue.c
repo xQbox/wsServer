@@ -1,20 +1,18 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <sys/eventfd.h>
 #include "queue.h"
 
-struct QNode_t
-{
-    QNode_t *next;
-    void    *item;
+#include <stdint.h>
+#include <stdlib.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
+
+struct QNode_t {
+    QNode_t* next;
+    void* item;
 };
 
-Queue_t *createQueue(void)
-{
-    Queue_t *q = malloc(sizeof *q);
-    if (!q)
-    {
+Queue_t* createQueue(void) {
+    Queue_t* q = malloc(sizeof *q);
+    if (!q) {
         return NULL;
     }
     q->head = NULL;
@@ -23,13 +21,11 @@ Queue_t *createQueue(void)
     q->shutdown = 0;
     q->notifyFd = -1;
 
-    if (pthread_mutex_init(&q->mutex, NULL) != 0)
-    {
+    if (pthread_mutex_init(&q->mutex, NULL) != 0) {
         free(q);
         return NULL;
     }
-    if (pthread_cond_init(&q->cond, NULL) != 0)
-    {
+    if (pthread_cond_init(&q->cond, NULL) != 0) {
         pthread_mutex_destroy(&q->mutex);
         free(q);
         return NULL;
@@ -37,35 +33,28 @@ Queue_t *createQueue(void)
     return q;
 }
 
-int queueEnableNotify(Queue_t *q)
-{
-    if (!q)
-    {
+int queueEnableNotify(Queue_t* q) {
+    if (!q) {
         return -1;
     }
     int fd = eventfd(0, EFD_NONBLOCK);
-    if (fd == -1)
-    {
+    if (fd == -1) {
         return -1;
     }
     q->notifyFd = fd;
     return fd;
 }
 
-void deleteQueueWith(Queue_t *q, void (*freeItem)(void *item))
-{
-    if (!q)
-    {
+void deleteQueueWith(Queue_t* q, void (*freeItem)(void* item)) {
+    if (!q) {
         return;
     }
 
     pthread_mutex_lock(&q->mutex);
-    QNode_t *node = q->head;
-    while (node)
-    {
-        QNode_t *next = node->next;
-        if (freeItem)
-        {
+    QNode_t* node = q->head;
+    while (node) {
+        QNode_t* next = node->next;
+        if (freeItem) {
             freeItem(node->item);
         }
         free(node);
@@ -76,8 +65,7 @@ void deleteQueueWith(Queue_t *q, void (*freeItem)(void *item))
     q->size = 0;
     pthread_mutex_unlock(&q->mutex);
 
-    if (q->notifyFd >= 0)
-    {
+    if (q->notifyFd >= 0) {
         close(q->notifyFd);
     }
     pthread_mutex_destroy(&q->mutex);
@@ -85,33 +73,24 @@ void deleteQueueWith(Queue_t *q, void (*freeItem)(void *item))
     free(q);
 }
 
-void deleteQueue(Queue_t *q)
-{
-    deleteQueueWith(q, NULL);
-}
+void deleteQueue(Queue_t* q) { deleteQueueWith(q, NULL); }
 
-int push(Queue_t *q, void *item)
-{
-    if (!q)
-    {
+int push(Queue_t* q, void* item) {
+    if (!q) {
         return -1;
     }
 
-    QNode_t *n = malloc(sizeof *n);
-    if (!n)
-    {
+    QNode_t* n = malloc(sizeof *n);
+    if (!n) {
         return -1;
     }
     n->item = item;
     n->next = NULL;
 
     pthread_mutex_lock(&q->mutex);
-    if (q->tail)
-    {
+    if (q->tail) {
         q->tail->next = n;
-    }
-    else
-    {
+    } else {
         q->head = n;
     }
     q->tail = n;
@@ -120,13 +99,8 @@ int push(Queue_t *q, void *item)
     int notifyFd = q->notifyFd;
     pthread_mutex_unlock(&q->mutex);
 
-    if (notifyFd >= 0)
-    {
+    if (notifyFd >= 0) {
         uint64_t one = 1;
-        /* eventfd, не FIFO: несколько push() между чтениями просто суммируются
-           в счётчике — ни одно пробуждение не теряется. Ошибка записи (например,
-           переполнение счётчика) сознательно игнорируется — потребитель всё
-           равно дренирует очередь через trypop() до опустошения. */
         ssize_t r = write(notifyFd, &one, sizeof one);
         (void)r;
     }
@@ -134,10 +108,8 @@ int push(Queue_t *q, void *item)
     return 0;
 }
 
-void shutdownQueue(Queue_t *q)
-{
-    if (!q)
-    {
+void shutdownQueue(Queue_t* q) {
+    if (!q) {
         return;
     }
     pthread_mutex_lock(&q->mutex);
@@ -146,18 +118,15 @@ void shutdownQueue(Queue_t *q)
     int notifyFd = q->notifyFd;
     pthread_mutex_unlock(&q->mutex);
 
-    if (notifyFd >= 0)
-    {
+    if (notifyFd >= 0) {
         uint64_t one = 1;
         ssize_t r = write(notifyFd, &one, sizeof one);
         (void)r;
     }
 }
 
-int queueIsShutdown(Queue_t *q)
-{
-    if (!q)
-    {
+int queueIsShutdown(Queue_t* q) {
+    if (!q) {
         return 1;
     }
     pthread_mutex_lock(&q->mutex);
@@ -167,13 +136,11 @@ int queueIsShutdown(Queue_t *q)
 }
 
 /* Извлечение головы очереди. Вызывающий держит мьютекс. */
-static void *popHeadLocked(Queue_t *q)
-{
-    QNode_t *n = q->head;
-    void *item = n->item;
+static void* popHeadLocked(Queue_t* q) {
+    QNode_t* n = q->head;
+    void* item = n->item;
     q->head = n->next;
-    if (!q->head)
-    {
+    if (!q->head) {
         q->tail = NULL;
     }
     q->size--;
@@ -181,21 +148,17 @@ static void *popHeadLocked(Queue_t *q)
     return item;
 }
 
-int pop(Queue_t *q, void **item)
-{
-    if (!q || !item)
-    {
+int pop(Queue_t* q, void** item) {
+    if (!q || !item) {
         return -1;
     }
 
     pthread_mutex_lock(&q->mutex);
-    while (q->size == 0 && !q->shutdown)
-    {
+    while (q->size == 0 && !q->shutdown) {
         pthread_cond_wait(&q->cond, &q->mutex);
     }
 
-    if (q->size == 0)
-    {
+    if (q->size == 0) {
         pthread_mutex_unlock(&q->mutex);
         return -1; /* shutdown и очередь пуста */
     }
@@ -205,16 +168,13 @@ int pop(Queue_t *q, void **item)
     return 0;
 }
 
-int trypop(Queue_t *q, void **item)
-{
-    if (!q || !item)
-    {
+int trypop(Queue_t* q, void** item) {
+    if (!q || !item) {
         return -1;
     }
 
     pthread_mutex_lock(&q->mutex);
-    if (q->size == 0)
-    {
+    if (q->size == 0) {
         pthread_mutex_unlock(&q->mutex);
         return -1;
     }
@@ -223,10 +183,8 @@ int trypop(Queue_t *q, void **item)
     return 0;
 }
 
-size_t queueSize(Queue_t *q)
-{
-    if (!q)
-    {
+size_t queueSize(Queue_t* q) {
+    if (!q) {
         return 0;
     }
     pthread_mutex_lock(&q->mutex);
